@@ -73,13 +73,14 @@ void setup(void)
   // optionally, increse the delay between retries & # of retries
   radio.setRetries(500,15);
   radio.enableDynamicPayloads();
+  radio.setAutoAck(false);
   radio.setDataRate(RF24_1MBPS);
   
   //radio.setAutoAck(false);
 
   // optionally, reduce the payload size.  seems to
   // improve reliability
-  //radio.setPayloadSize(32);
+  radio.setPayloadSize(4);
 
   //
   // Open pipes to other nodes for communication
