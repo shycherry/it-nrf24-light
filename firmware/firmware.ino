@@ -186,7 +186,7 @@ void loop(void)
     }
 
     // Try again 1s later
-    delay(1);
+    delay(5000);
   }
 
   //
