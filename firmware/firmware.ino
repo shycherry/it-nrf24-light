@@ -48,7 +48,7 @@ const char* role_friendly_name[] = {
   "invalid", "Ping out", "Pong back"};
 
 // The role of the current running sketch
-role_e role = role_ping_out;
+role_e role = role_pong_back;
 
 int blink = 0;
 
@@ -186,7 +186,7 @@ void loop(void)
     }
 
     // Try again 1s later
-    delay(5000);
+    delay(100);
   }
 
   //
@@ -213,7 +213,7 @@ void loop(void)
 
         // Delay just a little bit to let the other unit
         // make the transition to receiver
-        delay(20);
+        delay(200);
       }
 
       // First, stop listening so we can talk
@@ -221,6 +221,14 @@ void loop(void)
 
       // Send the final one back.
       radio.write( &got_time, sizeof(unsigned long) );
+
+      // blinktest
+      blink = (blink+1) % 2;
+      digitalWrite(NRF_LIGHT_COLD_WHITE, blink? HIGH : LOW);
+      digitalWrite(NRF_LIGHT_WARM_WHITE, blink? HIGH : LOW);
+      digitalWrite(NRF_LIGHT_RED, blink? HIGH : LOW);
+      digitalWrite(NRF_LIGHT_GREEN, blink? HIGH : LOW);
+      digitalWrite(NRF_LIGHT_BLUE, blink? HIGH : LOW);
 
 #ifdef DEBUG
       printf("Sent response.\n\r");
