@@ -1,4 +1,5 @@
 #define DEBUG
+#define INTERRUPT_MODE
 
 #include <SPI.h>
 #include "nRF24L01.h"
@@ -51,7 +52,7 @@ const char* role_friendly_name[] = {
 role_e role = role_pong_back;
 
 int blink = 0;
-
+void check_radio(void);
 void setup(void)
 {
 #ifdef DEBUG
@@ -123,10 +124,12 @@ void setup(void)
   //
   radio.printDetails();
 #endif
+  attachInterrupt(0, check_radio, FALLING);
 }
 
 void loop(void)
 {
+#ifndef INTERRUPT_MODE
   //
   // Ping out role.  Repeatedly send the current time
   //
@@ -268,6 +271,70 @@ void loop(void)
   }
 #endif
 
+#endif
 }
 
+void check_radio(void)
+{
+  // What happened?
+  bool tx,fail,rx;
+  radio.whatHappened(tx,fail,rx);
+
+  // Have we successfully transmitted?
+  if ( tx )
+  {
+    if ( role == role_ping_out )
+      printf("Send:OK\n\r");
+
+    if ( role == role_pong_back )
+      printf("Ack Payload:Sent\n\r");
+  }
+
+  // Have we failed to transmit?
+  if ( fail )
+  {
+    if ( role == role_ping_out )
+      printf("Send:Failed\n\r");
+
+    if ( role == role_pong_back )
+      printf("Ack Payload:Failed\n\r");
+  }
+
+  // Transmitter can power down for now, because
+  // the transmission is done.
+  if ( ( tx || fail ) && ( role == role_ping_out ) )
+    radio.powerDown();
+
+  // Did we receive a message?
+  if ( rx )
+  {
+    // If we're the sender, we've received an ack payload
+    if ( role == role_ping_out )
+    {
+      int message_count = 0;
+      radio.read(&message_count,sizeof(message_count));
+      printf("Ack:%lu\n\r",message_count);
+    }
+
+    // If we're the receiver, we've received a time message
+    if ( role == role_pong_back )
+    {
+      blink = (blink+1) % 2;
+      digitalWrite(NRF_LIGHT_COLD_WHITE, blink? HIGH : LOW);
+      digitalWrite(NRF_LIGHT_WARM_WHITE, blink? HIGH : LOW);
+      digitalWrite(NRF_LIGHT_RED, blink? HIGH : LOW);
+      digitalWrite(NRF_LIGHT_GREEN, blink? HIGH : LOW);
+      digitalWrite(NRF_LIGHT_BLUE, blink? HIGH : LOW);
+
+      // Get this payload and dump it
+      static unsigned long got_time;
+      radio.read( &got_time, sizeof(got_time) );
+      printf("Got payload %lu\n\r",got_time);
+      
+      // Add an ack packet for the next time around.  This is a simple
+      // packet counter
+      radio.writeAckPayload( 1, &blink, sizeof(blink) );
+    }
+  }
+}
 
