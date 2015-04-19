@@ -52,23 +52,19 @@ const char* role_friendly_name[] = {
 role_e role = role_pong_back;
 
 int blink = 0;
-int brightness = 255;
+int brightness = 0;
 unsigned long time = 0;
-#define TIME_FACTOR 10
 
 void check_radio(void);
 void do_blink(void);
-void update_lights(void);
-
-void update_lights(void);
+void update_lights(bool);
 
 void do_blink(void)
 {
   blink = (blink+1) % 2;
-  update_lights();
 }
 
-void update_lights(void)
+void update_lights(bool blink)
 {
   digitalWrite(NRF_LIGHT_COLD_WHITE, blink?HIGH:LOW);
   digitalWrite(NRF_LIGHT_WARM_WHITE, blink?HIGH:LOW);
@@ -285,12 +281,15 @@ void loop(void)
 
 #else // interrupt mode
 
-  do_blink();
-  update_lights();
-  delayMicroseconds(brightness*TIME_FACTOR);
-  do_blink();
-  update_lights();
-  delayMicroseconds((255*TIME_FACTOR) - (TIME_FACTOR*10));
+  int iter = 0;
+  for(iter = 0; iter < brightness; iter++)
+  {
+    update_lights(true);
+  }
+  for(iter = brightness; iter < 255; iter++)
+  {
+    update_lights(false);
+  }
 
   if(millis() > time+10){
     brightness = (brightness+1)%256;
