@@ -52,7 +52,31 @@ const char* role_friendly_name[] = {
 role_e role = role_pong_back;
 
 int blink = 0;
+int brightness = 255;
+unsigned long time = 0;
+#define TIME_FACTOR 10
+
 void check_radio(void);
+void do_blink(void);
+void update_lights(void);
+
+void update_lights(void);
+
+void do_blink(void)
+{
+  blink = (blink+1) % 2;
+  update_lights();
+}
+
+void update_lights(void)
+{
+  digitalWrite(NRF_LIGHT_COLD_WHITE, blink?HIGH:LOW);
+  digitalWrite(NRF_LIGHT_WARM_WHITE, blink?HIGH:LOW);
+  digitalWrite(NRF_LIGHT_RED, blink?HIGH:LOW);
+  digitalWrite(NRF_LIGHT_GREEN, blink?HIGH:LOW);
+  digitalWrite(NRF_LIGHT_BLUE, blink?HIGH:LOW);
+}
+
 void setup(void)
 {
 #ifdef DEBUG
@@ -175,13 +199,7 @@ void loop(void)
       radio.read( &got_time, sizeof(unsigned long) );
 
       // blinktest
-      blink = (blink+1) % 2;
-      digitalWrite(NRF_LIGHT_COLD_WHITE, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_WARM_WHITE, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_RED, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_GREEN, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_BLUE, blink? HIGH : LOW);
-
+      do_blink();
 #ifdef DEBUG
       // Spew it
       printf("Got response %lu, round-trip delay: %lu\n\r",got_time,millis()-got_time);
@@ -226,13 +244,7 @@ void loop(void)
       radio.write( &got_time, sizeof(unsigned long) );
 
       // blinktest
-      blink = (blink+1) % 2;
-      digitalWrite(NRF_LIGHT_COLD_WHITE, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_WARM_WHITE, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_RED, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_GREEN, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_BLUE, blink? HIGH : LOW);
-
+      do_blink();
 #ifdef DEBUG
       printf("Sent response.\n\r");
 #endif
@@ -270,6 +282,20 @@ void loop(void)
     }
   }
 #endif
+
+#else // interrupt mode
+
+  do_blink();
+  update_lights();
+  delayMicroseconds(brightness*TIME_FACTOR);
+  do_blink();
+  update_lights();
+  delayMicroseconds((255*TIME_FACTOR) - (TIME_FACTOR*10));
+
+  if(millis() > time+10){
+    brightness = (brightness+1)%256;
+    time = millis();
+  }
 
 #endif
 }
@@ -319,18 +345,12 @@ void check_radio(void)
     // If we're the receiver, we've received a time message
     if ( role == role_pong_back )
     {
-      blink = (blink+1) % 2;
-      digitalWrite(NRF_LIGHT_COLD_WHITE, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_WARM_WHITE, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_RED, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_GREEN, blink? HIGH : LOW);
-      digitalWrite(NRF_LIGHT_BLUE, blink? HIGH : LOW);
-
+      do_blink();
       // Get this payload and dump it
       static unsigned long got_time;
       radio.read( &got_time, sizeof(got_time) );
       printf("Got payload %lu\n\r",got_time);
-      
+
       // Add an ack packet for the next time around.  This is a simple
       // packet counter
       radio.writeAckPayload( 1, &blink, sizeof(blink) );
