@@ -291,10 +291,13 @@ void loop(void)
     update_lights(false);
   }
 
-  if(millis() > time+10){
+  if(millis() > time+16)
+  {
     brightness = (brightness+1)%256;
     time = millis();
   }
+
+  delay(8);
 
 #endif
 }
