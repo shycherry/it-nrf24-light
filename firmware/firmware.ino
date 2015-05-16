@@ -11,6 +11,9 @@
 //
 // Hardware definition
 //
+#define REFRESH_RATE_HZ       120
+#define GLOWING_RATE_HZ       60
+#define NB_LIGHTS             5
 #define NRF_LIGHT_COLD_WHITE  A0
 #define NRF_LIGHT_WARM_WHITE  A1
 #define NRF_LIGHT_RED         A2
@@ -20,6 +23,15 @@
 //
 // Hardware configuration
 //
+const int lights[NB_LIGHTS] = {
+  NRF_LIGHT_COLD_WHITE,
+  NRF_LIGHT_WARM_WHITE,
+  NRF_LIGHT_RED,
+  NRF_LIGHT_GREEN,
+  NRF_LIGHT_BLUE
+};
+
+int brightnesses[NB_LIGHTS] = {0, 0, 0, 0, 0};
 
 // Set up nRF24L01 radio on SPI bus plus pins 9 & 10
 RF24 radio(9,10);
@@ -51,26 +63,31 @@ const char* role_friendly_name[] = {
 // The role of the current running sketch
 role_e role = role_pong_back;
 
-int blink = 0;
 int brightness = 0;
 unsigned long time = 0;
 
 void check_radio(void);
-void do_blink(void);
-void update_lights(bool);
 
-void do_blink(void)
+void refresh_light(const int iLightAddr, const int iBrightness)
 {
-  blink = (blink+1) % 2;
+  int iter = 0;
+  for(iter = 0; iter < iBrightness; iter++)
+  {
+    digitalWrite(iLightAddr, HIGH);
+  }
+  for(iter = iBrightness; iter < 255; iter++)
+  {
+    digitalWrite(iLightAddr, LOW);
+  }
 }
 
-void update_lights(bool blink)
+void refresh_lights()
 {
-  digitalWrite(NRF_LIGHT_COLD_WHITE, blink?HIGH:LOW);
-  digitalWrite(NRF_LIGHT_WARM_WHITE, blink?HIGH:LOW);
-  digitalWrite(NRF_LIGHT_RED, blink?HIGH:LOW);
-  digitalWrite(NRF_LIGHT_GREEN, blink?HIGH:LOW);
-  digitalWrite(NRF_LIGHT_BLUE, blink?HIGH:LOW);
+  int iter = 0;
+  for(iter = 0; iter < NB_LIGHTS; iter++)
+  {
+    refresh_light(lights[iter], brightnesses[iter]);
+  }
 }
 
 void setup(void)
@@ -149,157 +166,15 @@ void setup(void)
 
 void loop(void)
 {
-#ifndef INTERRUPT_MODE
-  //
-  // Ping out role.  Repeatedly send the current time
-  //
+  refresh_lights();
 
-  if (role == role_ping_out)
+  if(millis() > time+(1000/GLOWING_RATE_HZ))
   {
-    // First, stop listening so we can talk.
-    radio.stopListening();
-
-    // Take the time, and send it.  This will block until complete
-    unsigned long time = millis();
-    printf("Now sending %lu...",time);
-    bool ok = radio.write( &time, sizeof(unsigned long) );
-
-#ifdef DEBUG
-    if (ok)
-      printf("ok...");
-    else
-      printf("failed.\n\r");
-#endif
-
-    // Now, continue listening
-    radio.startListening();
-
-    // Wait here until we get a response, or timeout (250ms)
-    unsigned long started_waiting_at = millis();
-    bool timeout = false;
-    while ( ! radio.available() && ! timeout )
-      if (millis() - started_waiting_at > 100 )
-        timeout = true;
-
-    // Describe the results
-    if ( timeout )
-    {
-#ifdef DEBUG
-      printf("Failed, response timed out.\n\r");
-#endif
-    }
-    else
-    {
-      // Grab the response, compare, and send to debugging spew
-      unsigned long got_time;
-      radio.read( &got_time, sizeof(unsigned long) );
-
-      // blinktest
-      do_blink();
-#ifdef DEBUG
-      // Spew it
-      printf("Got response %lu, round-trip delay: %lu\n\r",got_time,millis()-got_time);
-#endif
-    }
-
-    // Try again 1s later
-    delay(100);
-  }
-
-  //
-  // Pong back role.  Receive each packet, dump it out, and send it back
-  //
-
-  if ( role == role_pong_back )
-  {
-    // if there is data ready
-    if ( radio.available() )
-    {
-      // Dump the payloads until we've gotten everything
-      unsigned long got_time;
-      bool done = false;
-      while (!done)
-      {
-        // Fetch the payload, and see if this was the last one.
-        done = radio.read( &got_time, sizeof(unsigned long) );
-
-#ifdef DEBUG
-        // Spew it
-        printf("Got payload %lu...",got_time);
-#endif
-
-        // Delay just a little bit to let the other unit
-        // make the transition to receiver
-        delay(200);
-      }
-
-      // First, stop listening so we can talk
-      radio.stopListening();
-
-      // Send the final one back.
-      radio.write( &got_time, sizeof(unsigned long) );
-
-      // blinktest
-      do_blink();
-#ifdef DEBUG
-      printf("Sent response.\n\r");
-#endif
-
-      // Now, resume listening so we catch the next packets.
-      radio.startListening();
-    }
-  }
-
-  //
-  // Change roles
-  //
-
-#ifdef DEBUG
-  if ( Serial.available() )
-  {
-    char c = toupper(Serial.read());
-    if ( c == 'T' && role == role_pong_back )
-    {
-      printf("*** CHANGING TO TRANSMIT ROLE -- PRESS 'R' TO SWITCH BACK\n\r");
-
-      // Become the primary transmitter (ping out)
-      role = role_ping_out;
-      radio.openWritingPipe(pipes[0]);
-      radio.openReadingPipe(1,pipes[1]);
-    }
-    else if ( c == 'R' && role == role_ping_out )
-    {
-      printf("*** CHANGING TO RECEIVE ROLE -- PRESS 'T' TO SWITCH BACK\n\r");
-
-      // Become the primary receiver (pong back)
-      role = role_pong_back;
-      radio.openWritingPipe(pipes[1]);
-      radio.openReadingPipe(1,pipes[0]);
-    }
-  }
-#endif
-
-#else // interrupt mode
-
-  int iter = 0;
-  for(iter = 0; iter < brightness; iter++)
-  {
-    update_lights(true);
-  }
-  for(iter = brightness; iter < 255; iter++)
-  {
-    update_lights(false);
-  }
-
-  if(millis() > time+16)
-  {
-    brightness = (brightness+1)%256;
+    brightnesses[0] = (brightnesses[0]+1)%256;
     time = millis();
   }
 
-  delay(8);
-
-#endif
+  delay(1000/REFRESH_RATE_HZ);
 }
 
 void check_radio(void)
@@ -347,7 +222,6 @@ void check_radio(void)
     // If we're the receiver, we've received a time message
     if ( role == role_pong_back )
     {
-      do_blink();
       // Get this payload and dump it
       static unsigned long got_time;
       radio.read( &got_time, sizeof(got_time) );
@@ -355,7 +229,7 @@ void check_radio(void)
 
       // Add an ack packet for the next time around.  This is a simple
       // packet counter
-      radio.writeAckPayload( 1, &blink, sizeof(blink) );
+      radio.writeAckPayload( 1, &got_time, sizeof(got_time) );
     }
   }
 }
