@@ -90,6 +90,15 @@ void refresh_lights()
   }
 }
 
+void update_glow_test()
+{
+  int iter = 0;
+  for(iter = 0; iter < NB_LIGHTS; iter++)
+  {
+    brightnesses[iter] = (brightnesses[iter]+1)%256;
+  }
+}
+
 void setup(void)
 {
 #ifdef DEBUG
@@ -170,7 +179,7 @@ void loop(void)
 
   if(millis() > time+(1000/GLOWING_RATE_HZ))
   {
-    brightnesses[0] = (brightnesses[0]+1)%256;
+    update_glow_test();
     time = millis();
   }
 
