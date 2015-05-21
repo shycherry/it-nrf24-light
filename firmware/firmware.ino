@@ -1,5 +1,4 @@
 #define DEBUG
-#define INTERRUPT_MODE
 
 #include <SPI.h>
 #include "nRF24L01.h"
@@ -11,7 +10,6 @@
 //
 // Hardware definition
 //
-#define REFRESH_RATE_HZ       120
 #define GLOWING_RATE_HZ       60
 #define NB_LIGHTS             5
 #define NRF_LIGHT_COLD_WHITE  A0
@@ -68,34 +66,38 @@ unsigned long time = 0;
 
 void check_radio(void);
 
-void refresh_light(const int iLightAddr, const int iBrightness)
+void refresh_lights()
 {
-  int iter = 0;
-  for(iter = 0; iter < iBrightness; iter++)
+  int iterLight = 0;
+  int iterBright = 0;
+  for(iterBright = 0; iterBright < 255; iterBright++)
   {
-    digitalWrite(iLightAddr, HIGH);
-  }
-  for(iter = iBrightness; iter < 255; iter++)
-  {
-    digitalWrite(iLightAddr, LOW);
+    for(iterLight = 0; iterLight < NB_LIGHTS; iterLight++)
+    {
+      if(iterBright > brightnesses[iterLight])
+        digitalWrite(lights[iterLight], LOW);
+      else
+        digitalWrite(lights[iterLight], HIGH);
+    }
   }
 }
 
-void refresh_lights()
-{
-  int iter = 0;
-  for(iter = 0; iter < NB_LIGHTS; iter++)
-  {
-    refresh_light(lights[iter], brightnesses[iter]);
-  }
-}
+bool fadeIn[NB_LIGHTS] = {1,1,1,1,1};
 
 void update_glow_test()
 {
-  int iter = 0;
-  for(iter = 0; iter < NB_LIGHTS; iter++)
+  if(millis() > time+(1000/GLOWING_RATE_HZ))
   {
-    brightnesses[iter] = (brightnesses[iter]+1)%256;
+    int iter = 0;
+    // for(iter = 0; iter < NB_LIGHTS; iter++)
+    {
+      brightnesses[time%NB_LIGHTS] = (brightnesses[time%NB_LIGHTS] + ((fadeIn[time%NB_LIGHTS])? 1 : -1) );
+      if(brightnesses[time%NB_LIGHTS] == 255)
+        fadeIn[time%NB_LIGHTS] = 0;
+      else if(brightnesses[time%NB_LIGHTS] == 0)
+        fadeIn[time%NB_LIGHTS] = 1;
+    }
+    time = millis();
   }
 }
 
@@ -131,7 +133,7 @@ void setup(void)
   radio.setRetries(500,15);
   radio.enableDynamicPayloads();
   radio.setAutoAck(false);
-  radio.setDataRate(RF24_1MBPS);
+  radio.setDataRate(RF24_2MBPS);
 
   //radio.setAutoAck(false);
 
@@ -176,14 +178,7 @@ void setup(void)
 void loop(void)
 {
   refresh_lights();
-
-  if(millis() > time+(1000/GLOWING_RATE_HZ))
-  {
-    update_glow_test();
-    time = millis();
-  }
-
-  delay(1000/REFRESH_RATE_HZ);
+  update_glow_test();
 }
 
 void check_radio(void)
