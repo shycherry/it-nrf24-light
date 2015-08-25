@@ -10,7 +10,7 @@
 //
 // Hardware definition
 //
-#define GLOWING_RATE_HZ       60
+#define GLOWING_RATE_HZ       240
 #define NB_LIGHTS             5
 #define NRF_LIGHT_COLD_WHITE  A0
 #define NRF_LIGHT_WARM_WHITE  A1
@@ -29,7 +29,7 @@ const int lights[NB_LIGHTS] = {
   NRF_LIGHT_BLUE
 };
 
-int brightnesses[NB_LIGHTS] = {0, 0, 0, 0, 0};
+int brightnesses[NB_LIGHTS] = {128, 128, 128, 128, 128};
 
 // Set up nRF24L01 radio on SPI bus plus pins 9 & 10
 RF24 radio(9,10);
@@ -53,6 +53,8 @@ const uint64_t pipes[2] = {
 typedef enum {
   role_ping_out = 1, role_pong_back }
 role_e;
+
+bool isGlowTestActive = true;
 
 // The debug-friendly names of those roles
 const char* role_friendly_name[] = {
@@ -178,7 +180,9 @@ void setup(void)
 void loop(void)
 {
   refresh_lights();
-  update_glow_test();
+
+  if(isGlowTestActive)
+    update_glow_test();
 }
 
 void check_radio(void)
@@ -230,6 +234,8 @@ void check_radio(void)
       static unsigned long got_time;
       radio.read( &got_time, sizeof(got_time) );
       printf("Got payload %lu\n\r",got_time);
+
+      isGlowTestActive = !isGlowTestActive;
 
       // Add an ack packet for the next time around.  This is a simple
       // packet counter
