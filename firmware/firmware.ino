@@ -2,7 +2,6 @@
 #define NRF24BRIDGE_TEST
 
 #include <SPI.h>
-#include "nRF24L01.h"
 #include "RF24.h"
 
 #ifdef DEBUG
