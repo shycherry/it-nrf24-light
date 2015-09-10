@@ -17,7 +17,8 @@
 #define NRF_LIGHT_RED         A2
 #define NRF_LIGHT_GREEN       A3
 #define NRF_LIGHT_BLUE        A4
-
+//
+#define PAYLOAD_BYTES_SIZE 5
 //
 // Hardware configuration
 //
@@ -40,7 +41,9 @@ RF24 radio(9,10);
 
 // Radio pipe addresses for the 2 nodes to communicate.
 const uint64_t pipes[2] = {
-  0xF0F0F0F0E1LL, 0xF0F0F0F0D2LL };
+  0xF0F0F0F0E1LL, //light address
+  0xF0F0F0F0D2LL  //bridge address
+};
 
 bool isGlowTestActive = true;
 int brightness = 0;
@@ -52,11 +55,11 @@ void refresh_lights()
 {
   int iterLight = 0;
   int iterBright = 0;
-  for(iterBright = 0; iterBright < 255; iterBright++)
+  for(iterBright = 0; iterBright < 256; iterBright++)
   {
     for(iterLight = 0; iterLight < NB_LIGHTS; iterLight++)
     {
-      if(iterBright > brightnesses[iterLight])
+      if(iterBright >= brightnesses[iterLight])
         digitalWrite(lights[iterLight], LOW);
       else
         digitalWrite(lights[iterLight], HIGH);
@@ -112,14 +115,13 @@ void setup(void)
   // optionally, increse the delay between retries & # of retries
   radio.setRetries(500,15);
   radio.enableDynamicPayloads();
-  radio.setAutoAck(false);
+  radio.enableDynamicAck();
+  radio.enableAckPayload();
   radio.setDataRate(RF24_2MBPS);
-
-  //radio.setAutoAck(false);
 
   // optionally, reduce the payload size.  seems to
   // improve reliability
-  radio.setPayloadSize(8);
+  // radio.setPayloadSize(PAYLOAD_BYTES_SIZE);
 
   //
   // Open pipes to other nodes for communication
@@ -156,25 +158,32 @@ void loop(void)
 {
 #ifdef NRF24BRIDGE_TEST
   radio.stopListening();
-  unsigned long time = millis();
-  printf("Now sending %lu...", time);
-  bool ok = radio.write( &time, sizeof(unsigned long));
+  unsigned char time[PAYLOAD_BYTES_SIZE];
+  time[0] = 255;
+  time[1] = 0;
+  time[2] = 255;
+  time[3] = 242;
+  time[4] = 0;
+
+  printf("payload size %lu...\n", (unsigned long) radio.getPayloadSize());
+  printf("Now sending %lu...\n", (unsigned long) (*(&time[0])));
+  bool ok = radio.write( time, PAYLOAD_BYTES_SIZE);
+  printf("%s", ok ? "ok" : "ko");
   radio.startListening();
-  delay(1000);
+  delay(100);
 #else
   refresh_lights();
 
-  if(isGlowTestActive)
-    update_glow_test();
+  // if(isGlowTestActive)
+  //   update_glow_test();
 #endif
 }
 
 void check_radio(void)
 {
-  // What happened?
-  bool tx,fail,rx;
+  bool tx, fail, rx;
   radio.whatHappened(tx,fail,rx);
-
+  // What happened?
   // Have we successfully transmitted?
   if ( tx )
   {
@@ -198,8 +207,8 @@ void check_radio(void)
   // Transmitter can power down for now, because
   // the transmission is done.
 #ifdef NRF24BRIDGE_TEST
-  if ( ( tx || fail ))
-    radio.powerDown();
+  // if ( ( tx || fail ))
+    // radio.powerDown();
 #endif
 
   // Did we receive a message?
@@ -207,21 +216,25 @@ void check_radio(void)
   {
     // If we're the sender, we've received an ack payload
 #ifdef NRF24BRIDGE_TEST
-    unsigned long got_time = 0;
-    radio.read(&got_time,sizeof(unsigned long));
-    printf("Ack:%lu\n\r",got_time);
+    unsigned char gotPayload[PAYLOAD_BYTES_SIZE];
+    radio.read(gotPayload, sizeof(unsigned char[PAYLOAD_BYTES_SIZE]));
+    printf("Ack received !\n\r");
 #else
     // If we're the receiver, we've received a time message
     // Get this payload and dump it
-    unsigned long got_time;
-    radio.read( &got_time, sizeof(unsigned long) );
-    printf("Got payload %lu\n\r",got_time);
+    unsigned char gotPayload[PAYLOAD_BYTES_SIZE];
+    radio.read( gotPayload, sizeof(unsigned char[PAYLOAD_BYTES_SIZE]));
+    printf("Got payload !\n\r");
 
-    isGlowTestActive = !isGlowTestActive;
+    int iterLight = 0;
+    for(iterLight = 0; iterLight < NB_LIGHTS; iterLight++)
+    {
+      brightnesses[iterLight] = gotPayload[iterLight];
+    }
 
     // Add an ack packet for the next time around.  This is a simple
     // packet counter
-    radio.writeAckPayload( 1, &got_time, sizeof(unsigned long) );
+    radio.writeAckPayload( 1, gotPayload, sizeof(unsigned char[PAYLOAD_BYTES_SIZE]));
 #endif
   }
 }
